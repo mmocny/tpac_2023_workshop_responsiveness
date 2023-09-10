@@ -9,9 +9,8 @@
 - It's a workshop!
 	- (Don't just sit there, follow along!)
 - Explore options for measuring events & showcase Performance Timeline
-- Share some recommendations for simplification
-- Discuss a useful(?) model for breaking down Event Latency into parts
-- Look at several quirky problems examples, and some useful techniques
+- Share some recommendations for breaking down interactions into parts
+- Maybe look at several quirky examples, and share some useful techniques
 
 ## Useful Links
 
@@ -20,10 +19,16 @@
 - [Event Timing spec](https://w3c.github.io/event-timing/)
 - [LoAF Explainer](https://github.com/w3c/longtasks/blob/main/loaf-explainer.md)
 
-> Note: Testing in Chrome Canary with Experimental Web Platform Featues enabled
+> Note: Testing in Chrome Canary with Experimental Web Platform Featues enabled works best for later examples
 ## 1. Measuring Events, manually
 
 Let's attempt to measure Events, with a simple wrapper:
+
+```js
+document.addEventListener('click', measureEvent((event) => {
+	console.log(event);
+}));
+```
 
 ```js
 function measureEvent(callback) {
@@ -34,31 +39,28 @@ function measureEvent(callback) {
 }
 ```
 
-To be used, as such:
-```js
-document.addEventListener('click', measureEvent((event) => {
-	console.log(event);
-}));
-```
-
 <details>
 <summary>Answer: measuring event processing times</summary>
 
 ```js
 function measureEvent(callback) {
 	return (event) => {
+		const processingStart = performance.now();
+		callback(event);
+		const processingEnd = performance.now();
+
 		performance.measure('Event.InputDelay', {
 			start: event.timeStamp,
-			end: performance.now(),
+			end: processingStart,
 		});
-
-		const processingStart = performance.now();
-
-		callback(event);
-
 		performance.measure('Event.Processing', {
 			start: processingStart,
-			end: performance.now(),
+			end: processingEnd,
+		});
+
+		console.log('Event', event.type, {
+			inputDelay: processingStart - event.timeStamp,
+			processing: processingEnd - processingStart,
 		});
 	}
 }
@@ -68,23 +70,22 @@ function block(ms) {
 	while (performance.now() < target);
 }
 
-for (let type of ['keydown','keyup','pointerdown','pointerup','click']) {
-	document.addEventListener(type, measureEvent((event) => {
-		console.log(event);
-		block(20);
-	}), { capture: true });
-}
+document.addEventListener('click', measureEvent((event) => {
+	block(20);
+}), { capture: true });
 ```
 </details>
 
-## When are Effects done?
+This is one way to measure the time spent on main thread, running an event listener, visualized using User Timings.
 
-- **synchronous** effects, such as `console.log()` or using `localStorage` are "done" right away.
+## But, when are Effects "done"?
+
+- **synchronous** effects, such as `console.log()` or writing to `localStorage` are "done" right away.
 - **asynchronous** effects, such as fetch() response processing, don't resolve until after event is done.
-	- TODO: callout to Thursday talk
-- "Rendering" is a very specific type of asynchonous effect.
-- "Responsiveness" typically refers specifically to _visual responsiveness_
+- "Rendering" is a very specific type of **asynchonous** effect.
+- "Responsiveness" typically refers specifically to: _visual responsiveness_
 	- e.g. Interaction to Next Paint (INP)
+	- Even network responsiveness (which INP does **not** measure) typically means the visual update after response.
 	- Note: Accessibility features often rely on rendering as well (style, layout, etc).
 
 Let's update our measurement snippet to include rendering work:
@@ -95,39 +96,38 @@ Let's update our measurement snippet to include rendering work:
 ```js
 function measureEvent(callback) {
 	return (event) => {
+		const processingStart = performance.now();
+		callback(event);
+		const processingEnd = performance.now();
+
 		performance.measure('Event.InputDelay', {
 			start: event.timeStamp,
-			end: performance.now(),
+			end: processingStart,
 		});
-
-		const processingStart = performance.now();
-
-		callback(event);
-
 		performance.measure('Event.Processing', {
 			start: processingStart,
-			end: performance.now(),
+			end: processingEnd,
 		});
 
 		requestAnimationFrame(async () => {
 			const renderStart = performance.now();
-
 			try {
-				// This option is measurably better in many scenarios
 				await scheduler.yield();
-				performance.measure('Event.Rendering', {
-					start: renderStart,
-					end: performance.now(),
-				});
 			} catch {
-				// Fallback option
-				setTimeout(() => {
-					performance.measure('Event.Rendering', {
-						start: renderStart,
-						end: performance.now(),
-					});
-				}, 0);
+				await new Promise(resolve => setTimeout(resolve, 0));
 			}
+			const renderEnd = performance.now();
+			performance.measure('Event.Rendering', {
+				start: renderStart,
+				end: performance.now(),
+			});
+
+			console.log('Event', event.type, {
+				inputDelay: processingStart - event.timeStamp,
+				processing: processingEnd - processingStart,
+				renderDelay: renderStart - processingEnd,
+				rendering: renderEnd - renderStart,
+			});
 		});
 	}
 }
@@ -137,13 +137,10 @@ function block(ms) {
 	while (performance.now() < target);
 }
 
-
-for (let type of ['keydown','keyup','pointerdown','pointerup','click']) {
-	document.addEventListener(type, measureEvent((event) => {
-		console.log(event);
-		block(20);
-	}), { capture: true });
-}
+document.addEventListener('click', measureEvent((event) => {
+	console.log(event);
+	block(20);
+}), { capture: true });
 ```
 </details>
 
@@ -158,11 +155,12 @@ Try it:
 - Advantage: Access to context (custom components, state).
 - Advantage: Measurement *before* DOM modifications.
 - Advantage: Synchronous measures, no document unload risk.
+- Advantage: Uses simple primitives (works everywhere)
 - Disadvantage: Difficult to actually measure accurately
 	- Unlikely to measure *all* event handlers
-	- Imperfect visibility, especially for "next paint"
+	- Imperfect visibility, especially so for paint/presentation time.
 - Disadvantage: Computational Overhead
-- Disadvantage: Late bootstrapping
+- Disadvantage: Bootstrapping
 
 ## 2. Measuring using Event Timing API
 
@@ -257,16 +255,24 @@ Array.from(performance.eventCounts.values()).reduce((a,b) => a + b)
 
 Strategy:
 
-1. Filter Events down to interesting time ranges
-	- e.g. overlap with Interactions, largest INP
-1. Group events (by common presentation time).
+1. Filter timeline down to interesting time ranges
+	- e.g. overlap with long Interactions, specifically
+	- e.g. longest Interaction only (INP)
+	- 
+
+1. Group events by animation frame (using `renderTime`)
 1. Mark the smallest `processingStart`
 1. Mark the largest `processingEnd`
 1. Sum the total (non-overlapping) processing time
 
+With that, you get a better model for:
+- Input Delay
+- All event's processing (time and range)
+- Presentation Delay
+
 
 <details>
-<summary>Visualize just Interaction time ranges</summary>
+<summary>Visualize Interaction time ranges, decluttered</summary>
 
 ```js
 const interactionTimeRanges = [];
@@ -348,6 +354,7 @@ new PerformanceObserver(list => {
 ```js
 const interactionTimeRanges = [];
 
+// TODO: Update to save all events and interactions first, then post-process into time ranges
 new PerformanceObserver(list => {
 	for (let entry of list.getEntries()) {
 		if (entry.interactionId) {
@@ -405,9 +412,9 @@ new PerformanceObserver(list => {
 
 ## 3. Measurement using Long Animation Frames (LoAF)
 
-With Event timing API, we gained accurate measurement of processing times, and presentation -- but lost the ability to measure rendering work.  It was also a lot of work to "group events by animation frame".
+With Event timing API, we gained accurate measurement of processing times, and final presentation -- but lost the ability to measure rendering work.  This means we miss out on a useful diagnostic, and actually decreases the accuracy of event grouping.
 
-Let's use the new LoAF API, instead!
+It was also just a lot of work to "group events by animation frame".  Let's just use the new LoAF API, instead!
 
 ```js
 new PerformanceObserver(list => {
@@ -430,13 +437,105 @@ new PerformanceObserver(list => {
 });
 ```
 
-> Warning! This is a fresh API, just in Origin Trial. The guidance for use with Event Timing is evolving!
+> Warning! This is a fresh API, just in Origin Trial. The guidance for use with Event Timing is evolving!  For example, LoAFs are only available for frames > 50ms, not for every interaction.
 
-Each LoAF event marks that start of some work that caused a visual update (an invalidation).
+- Each LoAF entru marks a time range (main thread time).
+- Overlap with Interaction processing time marks an interesting LoAF.
+- Take Events within the animation frame time range (less grouping)
+- Measure processing times same as before
+- LoAF also gives render time breakdowns, and script attribution.
 
-> Technically, some LoAF do not, and are equivalent to plain Long Tasks, but this same feature applies to Event Timing.
+<details>
+<summary>LoAF + Event Timing</summary>
 
-## Some useful techniques
+```js
+const loafs = [];
+
+new PerformanceObserver(list => {
+	for (let entry of list.getEntries()) {
+		loafs.push(entry);
+	}
+}).observe({
+	type: 'long-animation-frame',
+	buffered: true
+});
+
+new PerformanceObserver(list => {
+	const frameData = {};
+	for (let entry of list.getEntries()) {
+		while (loaf = loafs[0]) {
+			const endTime = loaf.startTime + loaf.duration;
+			// This event is obviously from a previous frame (or isn't long and doesn't need Next Paint)
+			if (entry.processingEnd < loaf.startTime) {
+				console.assert('impossible 1');
+				break;
+			}
+
+			// This event is obviously for a future frame
+			if (entry.processingStart > endTime) {
+				loafs.shift();
+				continue;
+			}
+
+			if (loaf.startTime <= entry.processingStart) {
+				// console.log('match', loaf, entry);
+				frameData[loaf.startTime] ??= { loaf, events: [] };
+				frameData[loaf.startTime].events.push(entry);
+				break;
+			}
+			
+			console.assert('impossible 2');
+		}
+	}
+
+	for (let { loaf, events } of Object.values(frameData).filter(data => data.events.some(entry => entry.interactionId > 0))) {
+		// console.log(loaf, events);
+
+		const loafEndTime = loaf.startTime + loaf.duration;
+		let maxPresentationTime = 0;
+		let totalProcessingTime = 0;
+		let prevEnd = 0;
+		for (let {startTime, processingStart, processingEnd, duration } of events) {
+			maxPresentationTime = Math.max(maxPresentationTime, processingEnd, startTime + duration);
+			totalProcessingTime += processingEnd - Math.max(processingStart, prevEnd);
+			prevEnd = processingEnd;
+		}
+
+		const processingStart = events[0].processingStart;
+		const processingEnd = events.at(-1).processingEnd;
+		const percent = totalProcessingTime / (processingEnd - processingStart) * 100;
+
+		performance.measure(`Interaction.InputDelay`, {
+			start: events[0].startTime,
+			end: events[0].processingStart
+		});
+		performance.measure(`Interaction.Processing [${percent.toFixed(1)}%]`, {
+			start: processingStart,
+			end: processingEnd
+		});
+		performance.measure(`Interaction.Rendering`, {
+			start: loaf.renderStart,
+			end: loafEndTime,
+		});
+		performance.measure(`Interaction.PresentationDelay`, {
+			start: loafEndTime,
+			end: maxPresentationTime
+		});
+		
+	}
+
+
+}).observe({
+	type: 'event',
+	durationThreshold: 0,
+	buffered: true
+});
+```
+</details>
+
+# Fin
+
+## Some useful techniques to know
 
 > Basically, a `requestPostAnimationFrame()` polyfill
 
@@ -453,7 +552,10 @@ async function afterNextPaint() {
 
 - In React: `startTransition`
 
-## Some quirky problems
+## Some quirky problems to watch for
 
-- Hover
-- isInputPending()
+- yielding to split long task vs waiting for after next paint
+- isInputPending() inside event handlers
+- Hover events, especially mobile
+- Callbacks during (idle) periods before next paint
+- Unload handlers vs deferred work
