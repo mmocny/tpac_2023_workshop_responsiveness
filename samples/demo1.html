@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta name="viewport" content="width=device-width">
+		<style>
+body {
+	background-color: red;
+}
+/* 
+div:hover {
+	filter: blur(5px);
+	background-color: blue;
+} */
+		</style>
+	</head>
+
+	<body>
+		<div id="a">a
+			<div id="b">b
+				<div id="c">c</div>
+			</div>
+		</div>
+
+		<script>
+function block(ms) {
+	const target = performance.now() + ms;
+	while (performance.now() < target);
+}
+[a,b,c].forEach(el => el.addEventListener('pointerenter', (event) => {
+	console.log(event.type, event);
+}));
+a.addEventListener('click', () => {
+	block(20);
+})
+		</script>
+	</body>
+</html>
