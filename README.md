@@ -155,6 +155,8 @@ Try it:
 
 ## Discussion: Measuring manually
 
+- Disadvantage: Must explicitly decorate listeners.
+	> ...or try to monkey patch addEventListener
 - Advantage: Access to context (custom components, state).
 - Advantage: Attribution *before* DOM modifications.
 - Advantage: Synchronous measures, less document unload risk.
@@ -529,6 +531,13 @@ new PerformanceObserver(list => {
 		const processingEnd = events.at(-1).processingEnd;
 		const percent = totalProcessingTime / (processingEnd - processingStart) * 100;
 
+		const renderStart = Math.max(loaf.renderStart, processingEnd);
+		const renderEnd = loafEndTime;
+
+  		performance.measure(`Interaction`, {
+			start: events[0].startTime,
+			end: maxPresentationTime
+		});
 		performance.measure(`Interaction.InputDelay`, {
 			start: events[0].startTime,
 			end: events[0].processingStart
@@ -538,11 +547,11 @@ new PerformanceObserver(list => {
 			end: processingEnd
 		});
 		performance.measure(`Interaction.Rendering`, {
-			start: loaf.renderStart,
-			end: loafEndTime,
+			start: renderStart,
+			end: renderEnd,
 		});
 		performance.measure(`Interaction.PresentationDelay`, {
-			start: loafEndTime,
+			start: renderEnd,
 			end: maxPresentationTime
 		});
 		
@@ -557,29 +566,38 @@ new PerformanceObserver(list => {
 ```
 </details>
 
+
+## Discuss: Using LoAF
+
+- Disadvantage: New, unreleased API (currently in Origin Trial)
+- Advantage: Accurate and insightful
+	- (time points, scripts attribution)
+- Advantage: Comparatively simple to implement
+- Disadvantage: Only works for long frames on main thread, therefore, longer interactions
+	- Should usually measure Interactions above 100ms
+	- Due to input/presentation delay, which you can measure with just Event Timing
+
 # Fin
 
 ## Some useful techniques to know
 
-> Basically, a `requestPostAnimationFrame()` polyfill
+- `afterNextPaint`, basically, a `requestPostAnimationFrame()` polyfill
 
 ```js
 async function afterNextPaint() {
   return new Promise(resolve => requestAnimationFrame(async () => {
-    // I'm using scheduler.yield() for highest odds to get scheduled.
-    // Alternative: setTimeout(..., 0)
     await scheduler.yield();
     resolve();
   }));
 }
 ```
 
-- In React: `startTransition`
+- JS frameworks: `startTransition`
 
 ## Some quirky problems to watch for
 
-- yielding to split long task vs waiting for after next paint
+- Just yielding (to split long task) vs explicitly waiting for after next paint
 - isInputPending() inside event handlers
-- Hover events, especially mobile
+- Hover events, especially on mobile
+- Beacon data, deferring work in interactions, and (before)unload handlers
 - Callbacks during (idle) periods before next paint
-- Unload handlers vs deferred work
