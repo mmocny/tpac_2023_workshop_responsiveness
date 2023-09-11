@@ -33,8 +33,10 @@ document.addEventListener('click', measureEvent((event) => {
 ```js
 function measureEvent(callback) {
 	return (event) => {
-		// TODO: add measurement
+		// Exercise:
+		// measure before
 		callback(event);
+		// ..and after
 	}
 }
 ```
