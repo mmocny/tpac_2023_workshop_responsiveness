@@ -235,10 +235,13 @@ new PerformanceObserver(list => {
 </details>
 
 ### Single Event Timing
-TODO: Image of a single Event Timing
+
+![Screenshot 2023-09-05 at 09 37 56](https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/1a72c701-a99a-4f9a-baef-34e5753960e5)
 
 ### Multiple Event Timings
-TODO: Image of multiple Event Timings
+
+![Screenshot 2023-09-05 at 09 38 55](https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/411011b9-23b5-41c0-b847-7cb97c861dc0)
+
 
 > How many events, really?
 
@@ -250,19 +253,23 @@ Object.fromEntries(performance.eventCounts)
 Array.from(performance.eventCounts.values()).reduce((a,b) => a + b)
 ```
 
+![Screenshot 2023-09-05 at 10 10 21](https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/529832cc-eb6b-4fe4-8760-5c8dd6ab5f5a)
+
+
 ### Clearing the clutter
 
 - Sometimes multiple events dispatch for a single input "gesture"
 - Events can "nest" (but its not consistent)
 - Sometimes multuple input "gestures" arrive within a single animation frame
 
-Strategy:
+<img width="689" alt="Screenshot 2023-09-11 at 10 59 21" src="https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/3f90dad7-c4b7-4cf1-8292-4b9136f27e30">
+
+
+Strategy "flatten down":
 
 1. Filter timeline down to interesting time ranges
 	- e.g. overlap with long Interactions, specifically
 	- e.g. longest Interaction only (INP)
-	- 
-
 1. Group events by animation frame (using `renderTime`)
 1. Mark the smallest `processingStart`
 1. Mark the largest `processingEnd`
@@ -272,6 +279,7 @@ With that, you get a better model for:
 - Input Delay
 - All event's processing (time and range)
 - Presentation Delay
+
 
 
 <details>
