@@ -59,7 +59,6 @@ function splitByFrame(eventEntries) {
 }
 
 function visualizeFrameData({ loaf, events }) {
-	const loafEndTime = loaf.startTime + loaf.duration;
 
 	let maxPresentationTime = 0;
 	let totalProcessingTime = 0;
@@ -75,15 +74,18 @@ function visualizeFrameData({ loaf, events }) {
 	const percent = totalProcessingTime / (processingEnd - processingStart) * 100;
 
 	const renderStart = Math.max(loaf.renderStart, processingEnd);
-	const renderEnd = loafEndTime;
+	const renderEnd = loaf.startTime + loaf.duration;
+
+	// Both presentation times and renderEnd are rounded, so sometimes one laps the other...
+	const interactionEndTime = Math.max(maxPresentationTime, renderEnd);
 
 	performance.measure(`Interaction`, {
 		start: events[0].startTime,
-		end: maxPresentationTime
+		end: interactionEndTime
 	});
 	performance.measure(`Interaction.InputDelay`, {
 		start: events[0].startTime,
-		end: events[0].processingStart
+		end: processingStart
 	});
 	performance.measure(`Interaction.Processing [${percent.toFixed(1)}%]`, {
 		start: processingStart,
@@ -95,6 +97,6 @@ function visualizeFrameData({ loaf, events }) {
 	});
 	performance.measure(`Interaction.PresentationDelay`, {
 		start: renderEnd,
-		end: maxPresentationTime
+		end: interactionEndTime
 	});
 }
