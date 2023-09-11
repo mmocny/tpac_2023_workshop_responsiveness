@@ -275,7 +275,9 @@ Array.from(performance.eventCounts.values()).reduce((a,b) => a + b)
 - Events can "nest" (but its not consistent)
 - Sometimes multuple input "gestures" arrive within a single animation frame
 
-<img width="1425" alt="Screenshot 2023-09-11 at 11 02 57" src="https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/6672a047-4e5b-434f-b29d-630e7d658dfe">
+<img width="1122" alt="Screenshot 2023-09-11 at 11 10 04" src="https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/a90afd33-3758-41b1-b142-cd7bfaec5c94">
+<img width="1117" alt="Screenshot 2023-09-11 at 11 10 28" src="https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/4f65e080-9b83-4d6b-95e0-dfbc34e7118f">
+
 
 
 Strategy "flatten down":
