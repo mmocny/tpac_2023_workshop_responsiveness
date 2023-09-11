@@ -178,9 +178,22 @@ A convenient "summary" of *all* event handlers of a specific type (for a specifi
 ```js
 new PerformanceObserver(list => {
 	for (let entry of list.getEntries()) {
+		const renderTime = Math.max(entry.startTime + entry.duration, entry.processingEnd);
 		performance.measure('Event.Duration', {
 			start: entry.startTime,
 			end: entry.startTime + entry.duration
+		});
+		performance.measure('Event.InputDelay', {
+			start: entry.startTime,
+			end: entry.processingStart
+		});
+		performance.measure('Event.Processing', {
+			start: entry.processingStart,
+			end: entry.processingEnd
+		});
+		performance.measure('Event.PresentationDelay', {
+			start: entry.processingEnd,
+			end: renderTime
 		});
 	}
 }).observe({
