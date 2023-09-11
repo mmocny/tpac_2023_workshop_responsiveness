@@ -262,7 +262,7 @@ Array.from(performance.eventCounts.values()).reduce((a,b) => a + b)
 - Events can "nest" (but its not consistent)
 - Sometimes multuple input "gestures" arrive within a single animation frame
 
-<img width="689" alt="Screenshot 2023-09-11 at 10 59 21" src="https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/3f90dad7-c4b7-4cf1-8292-4b9136f27e30">
+<img width="1425" alt="Screenshot 2023-09-11 at 11 02 57" src="https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/6672a047-4e5b-434f-b29d-630e7d658dfe">
 
 
 Strategy "flatten down":
@@ -279,8 +279,6 @@ With that, you get a better model for:
 - Input Delay
 - All event's processing (time and range)
 - Presentation Delay
-
-
 
 <details>
 <summary>Visualize Interaction time ranges, decluttered</summary>
