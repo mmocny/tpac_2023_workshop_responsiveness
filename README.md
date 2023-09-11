@@ -119,6 +119,7 @@ function measureEvent(callback) {
 				await new Promise(resolve => setTimeout(resolve, 0));
 			}
 			const renderEnd = performance.now();
+
 			performance.measure('Event.Rendering', {
 				start: renderStart,
 				end: performance.now(),
@@ -155,13 +156,13 @@ Try it:
 ## Discussion: Measuring manually
 
 - Advantage: Access to context (custom components, state).
-- Advantage: Measurement *before* DOM modifications.
-- Advantage: Synchronous measures, no document unload risk.
+- Advantage: Attribution *before* DOM modifications.
+- Advantage: Synchronous measures, less document unload risk.
 - Advantage: Uses simple primitives (works everywhere)
-- Disadvantage: Difficult to actually measure accurately
-	- Unlikely to measure *all* event handlers
+- Disadvantage: Difficult to measure complete responsiveness accurately
+	- Unlikely to measure *all* event listeners
 	- Imperfect visibility, especially so for paint/presentation time.
-- Disadvantage: Computational Overhead
+- Disadvantage: Computational Overhead, blocking important interactions
 - Disadvantage: Bootstrapping
 
 ## 2. Measuring using Event Timing API
