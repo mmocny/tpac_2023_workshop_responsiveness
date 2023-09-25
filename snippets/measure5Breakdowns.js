@@ -16,10 +16,13 @@ new PerformanceObserver(list => {
 	const eventEntries = Array.from(list.getEntries()).sort((a,b) => {
 		return a.processingStart - b.processingStart;
 	});
-	const framesData = splitByFrame(eventEntries);
-	const interactionFramesData = framesData.filter(data => data.events.some(entry => entry.interactionId > 0));
+
+	// Optional: Filter down just to frames with "interactions"
+	const interactionFramesData = splitByFrame(eventEntries)
+		.filter(data => data.events.some(entry => entry.interactionId > 0));
 
 	for (let frameData of interactionFramesData) {
+		// frameData is: { loaf, events: [] }
 		visualizeFrameData(frameData);
 	}
 }).observe({
@@ -39,16 +42,15 @@ function splitByFrame(eventEntries) {
 			const renderEnd = loaf.startTime + loaf.duration;
 
 			// This event is obviously before the current loaf entry
-			if (entry.processingEnd < loaf.startTime) {
-				// (This shouldn't happen in this script, could change to assert)
-				break;
-			}
+			// This shouldn't happen, except when using buffered:true
+			if (entry.processingEnd < loaf.startTime) break;
 
 			// This event is for a future frame
-			if (entry.processingStart > renderEnd)
-				continue;
+			if (entry.processingStart > renderEnd) continue;
 
 			// Assert: loaf.startTime <= entry.processingStart
+			// Assert: renderEnd >= entry.processingEnd
+
 			framesByStartTime[loaf.startTime] ??= { loaf, events: [] };
 			framesByStartTime[loaf.startTime].events.push(entry);
 			break;
@@ -59,7 +61,6 @@ function splitByFrame(eventEntries) {
 }
 
 function visualizeFrameData({ loaf, events }) {
-
 	let maxPresentationTime = 0;
 	let totalProcessingTime = 0;
 	let prevEnd = 0;
@@ -76,7 +77,7 @@ function visualizeFrameData({ loaf, events }) {
 	const renderStart = Math.max(loaf.renderStart, processingEnd);
 	const renderEnd = loaf.startTime + loaf.duration;
 
-	// Both presentation times and renderEnd are rounded, so sometimes one laps the other...
+	// Both event presentation times and loaf renderEnd are rounded, so sometimes one laps the other slightly...
 	const interactionEndTime = Math.max(maxPresentationTime, renderEnd);
 
 	performance.measure(`Interaction`, {
@@ -90,6 +91,10 @@ function visualizeFrameData({ loaf, events }) {
 	performance.measure(`Interaction.Processing [${percent.toFixed(1)}%]`, {
 		start: processingStart,
 		end: processingEnd
+	});
+	performance.measure(`Interaction.RenderingDelay`, {
+		start: processingEnd,
+		end: renderStart
 	});
 	performance.measure(`Interaction.Rendering`, {
 		start: renderStart,
