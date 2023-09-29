@@ -284,10 +284,12 @@ Array.from(performance.eventCounts.values()).reduce((a,b) => a + b)
 
 Strategy "flatten down":
 
-1. Filter timeline down to interesting time ranges
-	- e.g. overlap with long Interactions, specifically
-	- e.g. longest Interaction only (INP)
-1. Group events by animation frame (using `renderTime`)
+1. Select important _time ranges_ for Events.
+    - e.g. based on all long Interactions, or
+    - e.g. based of the single longest Interaction only (your INP)
+1. Group _all events_ that share that same animation frame
+    - You can do this using just Event Timing `startTime + duration` (which is effectively a `renderTime`)
+    - Note: because `duration` is rounded to 8ms, group by `renderTime` +/- 8ms.
 1. Mark the smallest `processingStart`
 1. Mark the largest `processingEnd`
 1. Sum the total (non-overlapping) processing time
