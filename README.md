@@ -474,6 +474,9 @@ new PerformanceObserver(list => {
 - Measure processing times same as before
 - LoAF also gives render time breakdowns, and script attribution.
 
+![Screenshot 2023-09-30 at 10 42 16](https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/ffb6dfbf-6479-4540-bb64-db962815d7fc)
+
+
 <details>
 <summary>LoAF + Event Timing</summary>
 
