@@ -20,6 +20,7 @@
 - [LoAF Explainer](https://github.com/w3c/longtasks/blob/main/loaf-explainer.md)
 
 > Note: Testing in Chrome Canary with Experimental Web Platform Featues enabled works best for later examples
+
 ## 1. Measuring Events, manually
 
 Let's attempt to measure Events, with a simple wrapper:
@@ -28,23 +29,7 @@ Let's attempt to measure Events, with a simple wrapper:
 document.addEventListener('click', measureEvent((event) => {
 	console.log(event);
 }));
-```
 
-```js
-function measureEvent(callback) {
-	return (event) => {
-		// Exercise:
-		// measure before
-		callback(event);
-		// ..and after
-	}
-}
-```
-
-<details>
-<summary>Answer: measuring event processing times</summary>
-
-```js
 function measureEvent(callback) {
 	return (event) => {
 		const processingStart = performance.now();
@@ -66,7 +51,11 @@ function measureEvent(callback) {
 		});
 	}
 }
+```
 
+...test it:
+
+```js
 function block(ms) {
 	const target = performance.now() + ms;
 	while (performance.now() < target);
@@ -76,7 +65,6 @@ document.addEventListener('click', measureEvent((event) => {
 	block(20);
 }), { capture: true });
 ```
-</details>
 
 This is one way to measure the time spent on main thread, running an event listener, visualized using User Timings.
 
@@ -91,9 +79,6 @@ This is one way to measure the time spent on main thread, running an event liste
 	- Note: Accessibility features often rely on rendering as well (style, layout, etc).
 
 Let's update our measurement snippet to include rendering work:
-
-<details>
-<summary>Answer: measuring event rendering work as well</summary>
 
 ```js
 function measureEvent(callback) {
@@ -145,9 +130,9 @@ document.addEventListener('click', measureEvent((event) => {
 	block(20);
 }), { capture: true });
 ```
-</details>
 
 Try it:
+
 - Multiple event listeners
 - Multiple event types
 - `{ capture: true }`
@@ -280,8 +265,6 @@ Array.from(performance.eventCounts.values()).reduce((a,b) => a + b)
 <img width="1122" alt="Screenshot 2023-09-11 at 11 10 04" src="https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/a90afd33-3758-41b1-b142-cd7bfaec5c94">
 <img width="1117" alt="Screenshot 2023-09-11 at 11 10 28" src="https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/4f65e080-9b83-4d6b-95e0-dfbc34e7118f">
 
-
-
 Strategy "flatten down":
 
 1. Select important _time ranges_ for Events.
@@ -295,96 +278,17 @@ Strategy "flatten down":
 1. Sum the total (non-overlapping) processing time
 
 With that, you get a better model for:
+
 - Input Delay
 - All event's processing (time and range)
 - Presentation Delay
 
-<details>
-<summary>Visualize Interaction time ranges, decluttered</summary>
+### Measure Interaction Animation Frames: merging all Event Timings' processing times
 
 ```js
-const interactionTimeRanges = [];
-
 new PerformanceObserver(list => {
-	for (let entry of list.getEntries()) {
-		if (!entry.interactionId)
-			continue;
+	const interactionTimeRanges = [];
 
-		const renderTime = Math.max(entry.startTime + entry.duration, entry.processingEnd);
-
-		// We only need to report the first interaction per presentation
-		if (interactionTimeRanges.length > 0 && Math.abs(interactionTimeRanges.at(-1).end - renderTime) <= 8)
-			continue;
-
-		interactionTimeRanges.push({
-			start: entry.startTime,
-			end: renderTime
-		});
-
-		performance.measure('Interaction', interactionTimeRanges.at(-1));
-
-	}
-}).observe({
-	type: 'event',
-	durationThreshold: 0,
-	buffered: true
-});
-```
-</details>
-
-<details>
-<summary>Also visualize Event processing times</summary>
-
-```js
-const interactionTimeRanges = [];
-
-new PerformanceObserver(list => {
-	for (let entry of list.getEntries()) {
-		if (entry.interactionId) {
-			const renderTime = Math.max(entry.processingEnd, entry.startTime + entry.duration);
-
-			// We only need to report the first interaction per presentation
-			if (!(interactionTimeRanges.length > 0 && Math.abs(interactionTimeRanges.at(-1).end - renderTime) <= 8)) { 
-				interactionTimeRanges.push({
-					start: entry.startTime,
-					end: renderTime,
-					details: {
-						processingTimes: []
-					}
-				});
-			}
-			performance.measure('Interaction', interactionTimeRanges.at(-1));
-		}
-
-		if (interactionTimeRanges.length == 0) continue;
-
-		const currentInteraction = interactionTimeRanges.at(-1);
-
-		if (entry.processingStart >= currentInteraction.start && entry.processingEnd <= currentInteraction.end) {
-			currentInteraction.details.processingTimes.push({
-				start: entry.processingStart,
-				end: entry.processingEnd,
-			})
-			performance.measure('Event.Processing', currentInteraction.details.processingTimes.at(-1));
-		}
-	}
-}).observe({
-	type: 'event',
-	durationThreshold: 0,
-	buffered: true
-});
-```
-</details>
-
-
-<details>
-<summary>Merge Event processing times</summary>
-
-```js
-const interactionTimeRanges = [];
-
-// TODO: Update to save all events and interactions first, then post-process into time ranges
-new PerformanceObserver(list => {
 	for (let entry of list.getEntries()) {
 		if (entry.interactionId) {
 			const renderTime = Math.max(entry.processingEnd, entry.startTime + entry.duration);
@@ -436,7 +340,6 @@ new PerformanceObserver(list => {
 	buffered: true
 });
 ```
-</details>
 
 
 ## 3. Measurement using Long Animation Frames (LoAF)
@@ -445,18 +348,20 @@ With Event timing API, we gained accurate measurement of processing times, and f
 
 It was also just a lot of work to "group events by animation frame".  Let's just use the new LoAF API, instead!
 
+### Measure Long Animation Frames
+
 ```js
 new PerformanceObserver(list => {
 	for (let entry of list.getEntries()) {
-		performance.measure('LoAF.work', { 
+		performance.measure('LoAF.processingWork', { 
 			start: entry.startTime,
 			end: entry.renderStart,
 		});
-		performance.measure('LoAF.rendering', {
+		performance.measure('LoAF.eventsAndRAF', {
 			start: entry.renderStart,
 			end: entry.styleAndLayoutStart,
 		});
-		performance.measure('LoAF.style', {
+		performance.measure('LoAF.styleAndLayout', {
 			start: entry.styleAndLayoutStart,
 			end: entry.startTime + entry.duration,
 		});
@@ -468,17 +373,17 @@ new PerformanceObserver(list => {
 
 > Warning! This is a fresh API, just in Origin Trial. The guidance for use with Event Timing is evolving!  For example, LoAFs are only available for frames > 50ms, not for every interaction.
 
-- Each LoAF entru marks a time range (main thread time).
+### Measure Interactions using Long Animation Frames
+
+Strategy:
+
+- Each LoAF entry marks a time range (main thread time).
 - Overlap with Interaction processing time marks an interesting LoAF.
 - Take Events within the animation frame time range (less grouping)
 - Measure processing times same as before
 - LoAF also gives render time breakdowns, and script attribution.
 
 ![Screenshot 2023-09-30 at 10 42 16](https://github.com/mmocny/tpac_2023_workshop_responsiveness/assets/474282/ffb6dfbf-6479-4540-bb64-db962815d7fc)
-
-
-<details>
-<summary>LoAF + Event Timing</summary>
 
 ```js
 // Queue of LoAF entries.  Event Timings "lag" behind in reporting.
@@ -499,10 +404,13 @@ new PerformanceObserver(list => {
 	const eventEntries = Array.from(list.getEntries()).sort((a,b) => {
 		return a.processingStart - b.processingStart;
 	});
-	const framesData = splitByFrame(eventEntries);
-	const interactionFramesData = framesData.filter(data => data.events.some(entry => entry.interactionId > 0));
+
+	// Optional: Filter down just to frames with "interactions"
+	const interactionFramesData = splitByFrame(eventEntries)
+		.filter(data => data.events.some(entry => entry.interactionId > 0));
 
 	for (let frameData of interactionFramesData) {
+		// frameData is: { loaf, events: [] }
 		visualizeFrameData(frameData);
 	}
 }).observe({
@@ -522,16 +430,15 @@ function splitByFrame(eventEntries) {
 			const renderEnd = loaf.startTime + loaf.duration;
 
 			// This event is obviously before the current loaf entry
-			if (entry.processingEnd < loaf.startTime) {
-				// (This shouldn't happen in this script, could change to assert)
-				break;
-			}
+			// This shouldn't happen, except when using buffered:true
+			if (entry.processingEnd < loaf.startTime) break;
 
 			// This event is for a future frame
-			if (entry.processingStart > renderEnd)
-				continue;
+			if (entry.processingStart > renderEnd) continue;
 
 			// Assert: loaf.startTime <= entry.processingStart
+			// Assert: renderEnd >= entry.processingEnd
+
 			framesByStartTime[loaf.startTime] ??= { loaf, events: [] };
 			framesByStartTime[loaf.startTime].events.push(entry);
 			break;
@@ -542,7 +449,6 @@ function splitByFrame(eventEntries) {
 }
 
 function visualizeFrameData({ loaf, events }) {
-
 	let maxPresentationTime = 0;
 	let totalProcessingTime = 0;
 	let prevEnd = 0;
@@ -559,7 +465,7 @@ function visualizeFrameData({ loaf, events }) {
 	const renderStart = Math.max(loaf.renderStart, processingEnd);
 	const renderEnd = loaf.startTime + loaf.duration;
 
-	// Both presentation times and renderEnd are rounded, so sometimes one laps the other...
+	// Both event presentation times and loaf renderEnd are rounded, so sometimes one laps the other slightly...
 	const interactionEndTime = Math.max(maxPresentationTime, renderEnd);
 
 	performance.measure(`Interaction`, {
@@ -574,6 +480,10 @@ function visualizeFrameData({ loaf, events }) {
 		start: processingStart,
 		end: processingEnd
 	});
+	performance.measure(`Interaction.RenderingDelay`, {
+		start: processingEnd,
+		end: renderStart
+	});
 	performance.measure(`Interaction.Rendering`, {
 		start: renderStart,
 		end: renderEnd,
@@ -584,7 +494,6 @@ function visualizeFrameData({ loaf, events }) {
 	});
 }
 ```
-</details>
 
 
 ## Discuss: Using LoAF
